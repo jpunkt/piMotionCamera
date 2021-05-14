@@ -1,3 +1,4 @@
+from datetime import datetime
 import time
 import picamera
 import numpy as np
@@ -17,10 +18,10 @@ KERNELSIZE_GAUSS = (21, 21)
 
 
 def capture(cam):
-    image = np.empty((ROWS * COLS * 3,), dtype=np.uint8)
-    cam.capture(image, 'bgr')
-    image = image.reshape((ROWS, COLS, 3))[:, :, 0]
-    return image
+    img = np.empty((ROWS * COLS * 3,), dtype=np.uint8)
+    cam.capture(img, 'bgr')
+    img = img.reshape((ROWS, COLS, 3))[:, :, 0]
+    return img
 
 
 def calc_score(img, prev):
@@ -37,7 +38,8 @@ def calc_score(img, prev):
 
 
 def make_diff_image(img1, img2):
-    img = np.abs(np.int8(img1) - np.int8(img2))
+    img = np.uint8(np.abs(np.int8(img1) - np.int8(img2)))
+    # img = cv2.fastNlMeansDenoising(img, None)
     c = 255 / np.log(1 + np.max(img))
     return 255 - np.uint8(c * np.log(1 + img))
 
@@ -73,8 +75,9 @@ if __name__ == '__main__':
             if max_score is not None:
                 logger.info(f'new highscore: {max_score}')
                 inv = make_diff_image(max_img, base_img)
-                cv2.imwrite(f'test-img_{max_score:2.2f}.png', max_img)
-                cv2.imwrite(f'test-diff_{max_score:2.2f}.png', inv)
+                now = datetime.now().strftime('%y%m%d_%H%M%S')
+                cv2.imwrite(f'test-img_{now}.png', max_img)
+                cv2.imwrite(f'test-diff_{now}.png', inv)
 
             base_img = image
 
