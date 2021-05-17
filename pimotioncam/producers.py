@@ -1,5 +1,7 @@
 import logging
+import os.path
 import threading
+import random
 from time import sleep
 import queue
 import picamera
@@ -41,19 +43,22 @@ def make_diff_image(img1, img2):
 
 
 def get_files(path):
-    pass
-    return []
+    logger.debug(f'Fetching file list from {path} ...')
+    os.chdir(path)
+    return [os.path.abspath(p) for p in os.listdir(path)]
 
 
 class CamProducer(threading.Thread):
     def __init__(self,
                  q: queue.Queue,
-                 wait_long=CAM_WAIT_LONG,
-                 wait_short=CAM_WAIT_SHORT):
+                 score_threshold,
+                 wait_long,
+                 wait_short):
         threading.Thread.__init__(self)
         self.queue = q
         self.long_wait = wait_long
         self.short_wait = wait_short
+        self.score_threshold = score_threshold
         self.running = True
 
     def run(self):
@@ -73,7 +78,7 @@ class CamProducer(threading.Thread):
 
                 max_img = inv = max_score = None
 
-                while score > SCORE_THRESH:
+                while score > self.score_threshold:
                     if (max_score is None) or (score > max_score):
                         max_img = image
                         max_score = score
@@ -83,18 +88,19 @@ class CamProducer(threading.Thread):
                     image = new_img
 
                 if max_score is not None:
-                    now = datetime.now().strftime('%y%m%d_%H%M%S')
-                    logger.info(f'new highscore {max_score} at {now}')
                     inv = make_diff_image(max_img, base_img)
+                    now = datetime.now().strftime('%y-%m-%d %H:%M:%S')
+                    logger.info(f'new highscore {max_score} at {now}')
                     self.queue.put(inv)
 
                 base_img = image
 
 
 class ImgProducer(threading.Thread):
-    def __init__(self, q: queue.Queue,
+    def __init__(self,
+                 q: queue.Queue,
                  img_folder,
-                 wait=IMAGE_WAIT_INTERVAL):
+                 wait):
         threading.Thread.__init__(self)
         self.queue = q
         self.img_folder = img_folder
@@ -107,8 +113,11 @@ class ImgProducer(threading.Thread):
         while self.running:
             if len(img_list) == 0:
                 img_list = get_files(self.img_folder)
+                random.shuffle(img_list)
 
-            img = cv2.imread(img_list.pop())
+            fname = img_list.pop()
+            logger.debug(f'reading image {fname} ...')
+            img = cv2.imread(fname)
             self.queue.put(img)
             sleep(self.wait_time)
 
